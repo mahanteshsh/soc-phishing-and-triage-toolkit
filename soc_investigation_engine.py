@@ -53,6 +53,8 @@ import traceback
 from dataclasses import dataclass, field, asdict
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 from urllib.parse import urlparse
+from urllib.request import Request, urlopen
+from urllib.error import HTTPError, URLError
 
 
 APP_NAME = "SOC Investigation & Alert Triage Engine"
@@ -1016,22 +1018,128 @@ def request_provider_credentials(provider: str) -> Optional[str]:
         return None
 
 
+def extract_rapid7_investigation_id(url: str) -> Optional[str]:
+    """Extract the UUID from a Rapid7 InsightIDR investigation URL."""
+    m = re.search(
+        r"/investigations/([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})",
+        url,
+        re.I,
+    )
+    return m.group(1) if m else None
+
+
+def rapid7_api_region_from_url(url: str) -> str:
+    """Map the InsightIDR web URL region to the API hostname region."""
+    host = (urlparse(url).hostname or "").lower()
+    for prefix in ("us", "eu", "ca", "au", "ap"):
+        if host.startswith(prefix + "."):
+            return prefix
+    return "us"
+
+
+def rapid7_get_json(endpoint: str, api_key: str, timeout: int = 30) -> Tuple[bool, Any, str]:
+    """Perform a read-only Rapid7 InsightIDR API GET without exposing the key."""
+    req = Request(
+        endpoint,
+        headers={
+            "X-Api-Key": api_key,
+            "Accept": "application/json",
+            "User-Agent": f"SOC-Investigation-Engine/{APP_VERSION}",
+        },
+        method="GET",
+    )
+    try:
+        with urlopen(req, timeout=timeout) as response:
+            body = response.read().decode("utf-8", errors="replace")
+            try:
+                return True, json.loads(body), f"HTTP {response.status}"
+            except json.JSONDecodeError:
+                return False, None, "Rapid7 returned a non-JSON response."
+    except HTTPError as exc:
+        if exc.code == 401:
+            return False, None, "Rapid7 API authentication failed (HTTP 401)."
+        if exc.code == 403:
+            return False, None, "Rapid7 API access denied (HTTP 403). Check API-key permissions."
+        if exc.code == 404:
+            return False, None, "Rapid7 investigation was not found (HTTP 404)."
+        return False, None, f"Rapid7 API returned HTTP {exc.code}."
+    except URLError as exc:
+        return False, None, f"Unable to reach Rapid7 API: {exc.reason}"
+    except TimeoutError:
+        return False, None, "Rapid7 API request timed out."
+    except Exception as exc:
+        LOGGER.exception("Rapid7 API request failed")
+        return False, None, f"Rapid7 API request failed: {type(exc).__name__}"
+
+
 def fetch_authenticated_url(url: str, provider: str, credential: Optional[str]) -> Tuple[bool, str, str]:
     """
-    Intentionally conservative.
+    Read-only Rapid7 InsightIDR v2 integration.
 
-    This engine does not invent vendor-specific endpoints. A provider integration
-    should be implemented only after its documented API endpoint/schema is known.
+    Retrieves:
+      1. Investigation details
+      2. Alerts associated with the investigation
+      3. Rapid7 product alerts associated with the investigation
 
-    If no integration is configured, return a truthful status and let local
-    evidence continue.
+    No investigation update, assignment, disposition, or closure operation
+    is performed automatically.
     """
     if not credential:
         return False, "", "No credential supplied."
 
-    return False, "", (
-        f"{provider} authenticated retrieval is not implemented in this standalone "
-        "build. Provide the exported JSON/HTML/EML/log evidence for offline analysis."
+    if provider != "RAPID7":
+        return False, "", (
+            f"{provider} URL detected, but no authenticated connector is enabled "
+            "for that provider in this version."
+        )
+
+    investigation_id = extract_rapid7_investigation_id(url)
+    if not investigation_id:
+        return False, "", "Could not extract a Rapid7 investigation UUID from the supplied URL."
+
+    region = rapid7_api_region_from_url(url)
+    base = f"https://{region}.api.insight.rapid7.com/idr/v2/investigations"
+
+    ok, investigation, status = rapid7_get_json(
+        f"{base}/{investigation_id}", credential
+    )
+    if not ok:
+        return False, "", status
+
+    ok_alerts, alerts, alert_status = rapid7_get_json(
+        f"{base}/{investigation_id}/alerts?index=0&size=100",
+        credential,
+    )
+    if not ok_alerts:
+        alerts = {"error": alert_status}
+
+    ok_products, products, product_status = rapid7_get_json(
+        f"{base}/{investigation_id}/rapid7-product-alerts",
+        credential,
+    )
+    if not ok_products:
+        products = {"error": product_status}
+
+    payload = {
+        "rapid7_integration": {
+            "provider": "Rapid7 InsightIDR",
+            "region": region,
+            "investigation_id": investigation_id,
+            "source_url": url,
+            "read_only": True,
+            "investigation_retrieved": True,
+            "alerts_retrieved": ok_alerts,
+            "product_alerts_retrieved": ok_products,
+        },
+        "investigation": investigation,
+        "associated_alerts": alerts,
+        "rapid7_product_alerts": products,
+    }
+
+    return True, json.dumps(payload, ensure_ascii=False), (
+        f"Rapid7 investigation {investigation_id} retrieved successfully "
+        f"({status}); associated alerts: {'OK' if ok_alerts else 'unavailable'}; "
+        f"product alerts: {'OK' if ok_products else 'unavailable'}."
     )
 
 
@@ -1552,14 +1660,41 @@ def process_url(inv: Investigation, url: str):
         credential = request_provider_credentials(provider)
         ok, content, note = fetch_authenticated_url(url, provider, credential)
         if ok and content:
+            parsed_remote = safe_json_loads(content)
             eid = add_evidence(
                 inv, provider, url,
-                f"Authenticated data retrieved from {provider}.",
+                f"Authenticated read-only data retrieved from {provider}.",
                 content_hash=sha256_bytes(content.encode()),
-                notes="Retrieved using authenticated provider integration.",
+                notes="Retrieved using authenticated provider integration. API credential is not stored.",
             )
-            analyze_raw_event(inv, content, safe_json_loads(content), eid, url)
-            collect_common_indicators(inv, content, safe_json_loads(content))
+            inv.raw_events.append(
+                parsed_remote if isinstance(parsed_remote, dict) else {"raw": content}
+            )
+            analyze_raw_event(inv, content, parsed_remote, eid, url)
+            collect_common_indicators(inv, content, parsed_remote)
+            collect_timestamps(inv, parsed_remote, url)
+
+            if isinstance(parsed_remote, dict):
+                r7 = parsed_remote.get("investigation", {})
+                if isinstance(r7, dict):
+                    meta = parsed_remote.get("rapid7_integration", {})
+                    inv.alert_id = clean(
+                        r7.get("id") or r7.get("investigation_id") or meta.get("investigation_id"),
+                        inv.alert_id,
+                    )
+                    inv.alert_name = clean(r7.get("title") or r7.get("name"), inv.alert_name)
+                    inv.severity = clean(r7.get("priority"), inv.severity)
+                    inv.detection_source = "Rapid7 InsightIDR"
+                    if r7.get("assignee"):
+                        inv.recommended_owner = clean(r7.get("assignee"), inv.recommended_owner)
+                    if r7.get("status"):
+                        inv.analyst_notes.append(
+                            f"Rapid7 investigation status at retrieval: {clean(r7.get('status'))}."
+                        )
+                    if r7.get("disposition"):
+                        inv.analyst_notes.append(
+                            f"Rapid7 disposition at retrieval: {clean(r7.get('disposition'))}."
+                        )
         else:
             eid = add_evidence(
                 inv, provider, url,
