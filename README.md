@@ -1,118 +1,237 @@
-# SOC Phishing & Investigation Toolkit
+🛡️ SOC Phishing & Investigation Toolkit
+
+By VeerIsha Infrasec — IT Solutions Made Easy
 
 A Python-based SOC investigation and alert triage toolkit designed to help security analysts investigate alerts using structured evidence and produce an analyst-ready investigation package.
 
-## Main Investigation Tool
+🔎 Main Investigation Tool
 
-### `soc_investigation_engine.py`
+soc_investigation_engine.py
 
-This is the **main SOC investigation application**.
+This is the main SOC investigation application.
 
 It can investigate security alerts using:
 
-- JSON
-- TXT
-- LOG
-- XML
-- CSV
-- EML
-- MSG
-- HTML
-- Raw SIEM/security events
-- Security-platform investigation URLs
+JSON
 
-### Investigation Capabilities
+TXT
+
+LOG
+
+XML
+
+CSV
+
+EML
+
+MSG
+
+HTML
+
+Raw SIEM / security events
+
+Security-platform investigation URLs
+
+🧠 Investigation Capabilities
 
 The engine analyzes available evidence to identify:
 
-- Alert and incident context
-- Users and actors
-- Target users
-- Devices/assets
-- IP addresses
-- Domains
-- URLs
-- File hashes
-- Processes
-- Parent/child process relationships
-- Process command lines
-- Email headers and authentication results
-- Attachments
-- Event timelines
-- Suspicious indicators
-- Legitimate activity indicators
-- Missing investigation information
-- MITRE ATT&CK techniques
+Area
 
-## Investigation Output
+Evidence
+
+🚨 Alert Context
+
+Alert and incident context
+
+👤 Users
+
+Users and actors
+
+🎯 Targets
+
+Target users
+
+💻 Assets
+
+Devices and assets
+
+🌐 Network
+
+IP addresses, domains and URLs
+
+📁 Files
+
+File hashes
+
+⚙️ Processes
+
+Processes and command lines
+
+🔗 Process Relationships
+
+Parent/child process relationships
+
+✉️ Email
+
+Email headers and authentication results
+
+📎 Attachments
+
+Email/file attachments
+
+🕒 Timeline
+
+Event timelines
+
+⚠️ Indicators
+
+Suspicious indicators
+
+✅ Legitimate Activity
+
+Legitimate activity indicators
+
+❓ Gaps
+
+Missing investigation information
+
+🎯 MITRE
+
+MITRE ATT&CK techniques
+
+📋 Investigation Output
 
 The tool produces a complete SOC investigation package containing:
 
-1. Executive summary
-2. Plain-English explanation of what happened
-3. User/actor analysis
-4. Asset/device analysis
-5. Network indicators
-6. Process analysis
-7. Timeline
-8. Security findings
-9. Legitimate activity indicators
-10. Suspicious/malicious indicators
-11. Missing information
-12. Questions to ask the affected user
-13. Questions for IT/system owners
-14. MITRE ATT&CK mapping
-15. Final verdict
-16. Confidence level
-17. Recommended severity
-18. Recommended assignment/owner
-19. Recommended remediation
-20. SOC closure comments
-21. Evidence register
-22. Analyst notes
+Executive summary
 
-## Verdicts
+Plain-English explanation of what happened
+
+User / actor analysis
+
+Asset / device analysis
+
+Network indicators
+
+Process analysis
+
+Timeline
+
+Security findings
+
+Legitimate activity indicators
+
+Suspicious / malicious indicators
+
+Missing information
+
+Questions to ask the affected user
+
+Questions for IT / system owners
+
+MITRE ATT&CK mapping
+
+Final verdict
+
+Confidence level
+
+Recommended severity
+
+Recommended assignment / owner
+
+Recommended remediation
+
+SOC closure comments
+
+Evidence register
+
+Analyst notes
+
+🎯 Verdicts
 
 The engine can produce assessments such as:
 
-- `FALSE POSITIVE`
-- `BENIGN / EXPECTED ACTIVITY`
-- `TRUE POSITIVE`
-- `SUSPICIOUS / REQUIRES INVESTIGATION`
-- `INCONCLUSIVE`
+Verdict
 
-The verdict is based on the evidence available to the engine. It does not intentionally fabricate missing information.
+Meaning
 
-## API Authentication
+FALSE POSITIVE
 
-API credentials are **not required for local evidence**.
+Alert determined to be false based on available evidence
+
+BENIGN / EXPECTED ACTIVITY
+
+Activity is legitimate or expected
+
+TRUE POSITIVE
+
+Evidence supports a genuine security incident
+
+SUSPICIOUS / REQUIRES INVESTIGATION
+
+Evidence indicates further investigation is required
+
+INCONCLUSIVE
+
+Available evidence is insufficient for a confident conclusion
+
+Evidence-driven: The verdict is based on the evidence available to the engine. It does not intentionally fabricate missing information.
+
+🔐 API Authentication
+
+API credentials are not required for local evidence.
 
 The tool does not request an API key when analyzing:
 
-- JSON
-- TXT
-- LOG
-- EML
-- MSG
-- HTML
-- XML
-- CSV
-- Pasted raw logs/events
+JSON
+
+TXT
+
+LOG
+
+EML
+
+MSG
+
+HTML
+
+XML
+
+CSV
+
+Pasted raw logs / events
 
 For security-platform URLs, authentication may be requested only when authenticated access is required.
 
-Supported provider classification currently includes:
+Supported Provider Classification
 
-- Rapid7
-- Microsoft Defender
-- CrowdStrike
-- Generic URLs
+Rapid7
 
-API credentials should never be hardcoded into the source code or included in investigation reports.
+Microsoft Defender
 
-## Running the Tool
+CrowdStrike
 
-### Interactive mode
+Generic URLs
 
-```bash
+Security: API credentials should never be hardcoded into the source code or included in investigation reports.
+
+🚀 Running the Tool
+
+Interactive Mode
+
 python soc_investigation_engine.py
+
+🏢 About VeerIsha Infrasec
+
+VeerIsha Infrasec provides IT, software, cybersecurity and infrastructure solutions.
+
+IT Solutions Made Easy.
+
+📌 Project
+
+SOC Phishing & Investigation Toolkit
+
+Developed and maintained by VeerIsha Infrasec.
+
+The project is intended to support structured, evidence-driven SOC investigation and analyst triage, while keeping investigation conclusions grounded in the evidence available.
